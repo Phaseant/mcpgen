@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func TestCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := []string{"-spec", path, "-out", output, "-package", "customapi"}
-	if err := run(args); err != nil {
+	if _, err := run(args); err != nil {
 		t.Fatal(err)
 	}
 	generated, err := os.ReadFile(filepath.Join(output, "handlers.gen.go"))
@@ -26,16 +27,32 @@ func TestCLI(t *testing.T) {
 	if !strings.Contains(string(generated), "package customapi") || !strings.Contains(string(generated), "Echo(context.Context") {
 		t.Fatalf("handlers=%s", generated)
 	}
-	if err := run(append(args, "-check")); err != nil {
+	if _, err := run(append(args, "-check")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(strings.Replace(source, "name: cli", "name: changed", 1)), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(append(args, "-check")); err == nil || !strings.Contains(err.Error(), "stale") {
+	if _, err := run(append(args, "-check")); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("drift error=%v", err)
 	}
-	if err := run(append(args, "-package", "bad-name")); err == nil {
+	if _, err := run(append(args, "-package", "bad-name")); err == nil {
 		t.Fatal("invalid package accepted")
+	}
+}
+
+func TestHelpOnError(t *testing.T) {
+	for _, args := range [][]string{{"-spec", "missing.yaml"}, {"-unknown"}} {
+		var stderr bytes.Buffer
+		if code := execute(args, &stderr); code != 1 {
+			t.Fatalf("args=%v exit code=%d", args, code)
+		}
+		if output := stderr.String(); !strings.Contains(output, "mcpgen:") || !strings.Contains(output, "Usage of mcpgen:") || strings.Count(output, "Usage of mcpgen:") != 1 {
+			t.Fatalf("args=%v stderr=%q", args, output)
+		}
+	}
+	var stderr bytes.Buffer
+	if code := execute([]string{"-help"}, &stderr); code != 0 || !strings.Contains(stderr.String(), "Usage of mcpgen:") {
+		t.Fatalf("help exit code=%d stderr=%q", code, stderr.String())
 	}
 }

@@ -33,9 +33,11 @@ Handwritten handlers live in `example/internal/mcpserver`; application storage l
 Build or install the CLI from this checkout:
 
 ```sh
-go install ./cmd/mcpgen
+go install .
 mcpgen -spec mcp.yaml -out internal/mcpapi -package mcpapi
 ```
+
+For a published release, use `go install github.com/phaseant/mcpgen@latest`.
 
 The defaults are `-spec mcp.yaml`, `-out internal/mcpapi`, and `-package mcpapi`.
 In another application, add the SDK dependency:
@@ -253,7 +255,7 @@ It refuses to overwrite handwritten files or symlinks.
 Check drift without changing files:
 
 ```sh
-go run ./cmd/mcpgen -spec example/mcp.yaml -out example/internal/mcpapi -check
+go run . -spec example/mcp.yaml -out example/internal/mcpapi -check
 ```
 
 CI runs generation, checks the Git diff, checks generation drift, runs race tests,
