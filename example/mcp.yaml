@@ -1,0 +1,118 @@
+mcp: "1"
+info:
+  name: cats_and_dogs
+  version: 1.0.0
+tools:
+  echo:
+    title: Echo
+    description: Echo a message.
+    input:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1024
+    output:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+  get_pet:
+    title: Get pet
+    description: Get a pet by its ID.
+    annotations:
+      readOnlyHint: true
+      destructiveHint: false
+      openWorldHint: false
+    input:
+      type: object
+      additionalProperties: false
+      required: [pet_id]
+      properties:
+        pet_id:
+          type: string
+          pattern: '^[0-9]+$'
+    output:
+      $ref: '#/schemas/Pet'
+  create_pet:
+    description: Create a pet.
+    input:
+      $ref: '#/schemas/CreatePetRequest'
+    output:
+      $ref: '#/schemas/Pet'
+  search:
+    description: Search pets by name.
+    annotations:
+      readOnlyHint: true
+      destructiveHint: false
+    input:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query:
+          type: string
+          description: Case-insensitive name substring.
+          maxLength: 100
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        sort:
+          type: string
+          enum: [relevance, created_at]
+        filter:
+          type: object
+          additionalProperties: false
+          properties:
+            ids:
+              type: array
+              maxItems: 100
+              uniqueItems: true
+              items:
+                type: string
+    output:
+      $ref: '#/schemas/SearchResult'
+schemas:
+  CreatePetRequest:
+    type: object
+    additionalProperties: false
+    required: [name, kind]
+    properties:
+      kind:
+        $ref: '#/schemas/PetKind'
+      name:
+        type: string
+        minLength: 1
+        maxLength: 100
+  Pet:
+    type: object
+    additionalProperties: false
+    required: [id, name, kind]
+    properties:
+      kind:
+        $ref: '#/schemas/PetKind'
+      id:
+        type: string
+        pattern: '^[0-9]+$'
+      name:
+        type: string
+        minLength: 1
+        maxLength: 100
+  SearchResult:
+    type: object
+    additionalProperties: false
+    required: [pets]
+    properties:
+      pets:
+        type: array
+        items:
+          $ref: '#/schemas/Pet'
+  PetKind:
+    description: The pet is a cat or a dog.
+    type: string
+    enum: [cat, dog]

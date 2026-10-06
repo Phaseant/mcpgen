@@ -1,0 +1,80 @@
+package generate
+
+import (
+	"bytes"
+	"fmt"
+)
+
+func (m *model) server() []byte {
+	var b bytes.Buffer
+	b.WriteString(`import (
+"context"
+"errors"
+"log/slog"
+"net/http"
+"reflect"
+"time"
+"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+type Server struct { mcp *mcp.Server; logger *slog.Logger }
+type serverConfig struct { logger *slog.Logger; middleware []Middleware }
+type ServerOption func(*serverConfig)
+func WithLogger(logger *slog.Logger) ServerOption { return func(cfg *serverConfig) { cfg.logger = logger } }
+// WithMiddleware runs middleware in declaration order, after input validation.
+func WithMiddleware(middleware ...Middleware) ServerOption {
+return func(cfg *serverConfig) { cfg.middleware = append(cfg.middleware, middleware...) }
+}
+
+func NewServer(handler Handler, opts ...ServerOption) (*Server, error) {
+cfg := &serverConfig{}
+for _, opt := range opts { if opt == nil { return nil, errors.New("nil ServerOption") }; opt(cfg) }
+`)
+	fmt.Fprintf(&b, "s := mcp.NewServer(&mcp.Implementation{Name: %q, Version: %q}, &mcp.ServerOptions{Logger: cfg.logger})\n", m.Doc.Info.Name, m.Doc.Info.Version)
+	b.WriteString(`if err := RegisterTools(s, handler, cfg.middleware...); err != nil { return nil, err }
+return &Server{mcp: s, logger: cfg.logger}, nil
+}
+
+// RegisterTools adds every generated tool to an existing SDK server.
+// Call it during startup; names in this specification replace existing tools with the same name.
+func RegisterTools(server *mcp.Server, handler Handler, middleware ...Middleware) error {
+if server == nil { return errors.New("nil MCP server") }
+if handler == nil { return errors.New("nil Handler") }
+v := reflect.ValueOf(handler)
+switch v.Kind() { case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+if v.IsNil() { return errors.New("nil Handler") }
+}
+for _, mw := range middleware { if mw == nil { return errors.New("nil Middleware") } }
+`)
+	for _, t := range m.Tools {
+		fmt.Fprintf(&b, "register%s(server, handler, middleware)\n", t.Method)
+	}
+	b.WriteString(`return nil
+}
+
+func (s *Server) Run(ctx context.Context) error { return s.RunStdio(ctx) }
+func (s *Server) RunStdio(ctx context.Context) error { return s.mcp.Run(ctx, &mcp.StdioTransport{}) }
+// MCP provides SDK access for custom transports and integrations.
+func (s *Server) MCP() *mcp.Server { return s.mcp }
+
+// HTTPOptions configures the Streamable HTTP endpoint.
+type HTTPOptions struct {
+Stateless bool
+JSONResponse bool
+SessionTimeout time.Duration
+}
+
+// HTTPHandler creates an endpoint to mount once on an existing HTTP router.
+// A nil options value uses SDK defaults (stateful sessions and SSE responses).
+func (s *Server) HTTPHandler(opts *HTTPOptions) http.Handler {
+cfg := &mcp.StreamableHTTPOptions{Logger: s.logger}
+if opts != nil {
+cfg.Stateless = opts.Stateless
+cfg.JSONResponse = opts.JSONResponse
+cfg.SessionTimeout = opts.SessionTimeout
+}
+return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.mcp }, cfg)
+}
+`)
+	return b.Bytes()
+}
